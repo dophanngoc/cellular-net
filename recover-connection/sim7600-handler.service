@@ -1,0 +1,15 @@
+[Unit]
+Description=Jetson: Simcom LTE wwan interface setup
+Wants=network.target
+After=network.target
+
+[Service]
+Type = oneshot
+ExecStart=/usr/bin/wwan_preup.sh
+ExecStart=/sbin/dhclient -1 wwan0
+ExecStopPost=/usr/bin/wwan_postdown.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy = multi-user.target
+

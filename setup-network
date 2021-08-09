@@ -1,0 +1,131 @@
+#!/bin/bash
+
+set -e
+apn_list="soracom.io"
+function initialize_modem()
+{
+   if [ -e /dev/ttyUSB2 ]
+   then
+      chmod 666 /dev/ttyUSB2
+      sleep 1
+      expect <<EOS || return 1
+spawn cu -l /dev/ttyUSB2
+sleep 1
+expect "Connected."
+send "\rATE1\r"
+send "AT+CNMP=2\r"
+expect "OK"
+sleep 1
+send "AT+CSQ\r"
+expect "OK"
+sleep 1
+send "AT+COPS?\r"
+expect "OK"
+exit
+EOS
+      echo setup completed
+      return 0
+   else
+      echo could not find /dev/ttyUSB2. try OS reboot.
+      return 1
+   fi
+}
+function configure_apn()
+{
+   if [ -e /dev/ttyUSB2 ]
+   then
+      chmod 666 /dev/ttyUSB2
+      sleep 1
+      expect <<EOS || return 1
+spawn cu -l /dev/ttyUSB2
+sleep 1
+expect "Connected."
+send "\rATE1\r"
+send "AT+CGDCONT?\r"
+expect "OK"
+sleep 1
+send "AT+CGDCONT=0,\"IP\",\"$apn_list\"\r"
+expect "OK"
+sleep 1
+send "AT+CGDCONT=1,\"IP\",\"$apn_list\"\r"
+expect "OK"
+sleep 1
+send "AT+CGDCONT?\r"
+expect "OK"
+sleep 1
+send "ATE0\r"
+expect "OK"
+sleep 2
+exit
+EOS
+      echo setup apn completed!
+      return 0
+   else
+      echo could not find /dev/ttyUSB2. Try OS reboot.
+      return 1
+   fi
+}
+
+function connect_network()
+{
+   if [ -e /dev/ttyUSB2 ]
+   then
+      chmod 666 /dev/ttyUSB2
+      sleep 1
+      expect <<EOS || return 1
+spawn cu -l /dev/ttyUSB2
+sleep 1
+expect "Connected."
+send "AT+CNMP=2\r"
+sleep 1
+expect "OK"
+send "AT$QCRMCALL=1,1\r"
+sleep 2
+exit
+EOS
+      sleep 1
+      echo -e "allocating ip address..."
+      sudo dhclient -1 -v wwan0
+      sleep 2
+      echo -e "\ntrying to ping the network..."
+      ping -I wwan0 8.8.8.8
+   fi
+}
+
+function show_usage ()
+{
+   printf "run: \n"
+   printf "'bash setup-network initmodem' to initialize simcom modem\n"
+   printf "'bash setup-network apnconfig' to configure Soracom network connection\n"
+   printf "'bash setup-network connect' to connect the NIC to network\n"
+}
+
+if [ $UID != 0 ]
+then
+   echo please execute as root or use sudo command.
+   exit 1
+fi
+
+if [ -z "$1" ]; then
+   show_usage
+else
+   usb-devices | grep simcom > /dev/null || return 0
+   echo found simcom Modem
+   if [ ! -x /usr/bin/expect -o ! -x /usr/bin/cu ]
+   then
+      echo Installling required packages.
+      apt-get install -y --no-install-recommends cu expect || exit 1
+   fi
+   if [ "$1" == "initmodem" ]; then
+      initialize_modem
+      exit 0
+   fi
+   if [ "$1" == "apnconfig" ]; then
+      configure_apn
+      exit 0
+   fi
+   if [ "$1" == "connect" ]; then
+      connect_network
+      exit 0
+   fi
+fi
